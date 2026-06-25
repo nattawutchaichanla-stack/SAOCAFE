@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RANGSAN Slip Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F8F8F7;color:#1a1a1a;padding:16px}
+.wrap{max-width:720px;margin:0 auto}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+h1{font-size:18px;font-weight:500}
+.sub{font-size:11px;color:#888;margin-top:2px}
+.btns{display:flex;gap:8px}
+.btn{padding:8px 14px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:inherit}
+.btn-blue{background:#185FA5;color:#fff}
+.btn-gray{background:#F1EFE8;color:#444}
+.btn:hover{opacity:.85}
+.krow{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:16px}
+.kpi{background:#fff;border-radius:10px;border:0.5px solid rgba(0,0,0,0.1);padding:11px 13px}
+.kl{font-size:10px;color:#888;margin-bottom:2px}
+.kv{font-size:18px;font-weight:500}
+.ks{font-size:10px;color:#888;margin-top:1px}
+.sec{font-size:12px;font-weight:500;color:#555;margin:16px 0 8px}
+.branch{margin-bottom:8px;border-radius:10px;overflow:hidden;border:0.5px solid rgba(0,0,0,0.1)}
+.bhead{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;color:#fff;cursor:pointer}
+.bhead:hover{filter:brightness(.93)}
+.btxt{font-size:13px;font-weight:600}
+.bcnt{font-size:10px;opacity:.85;margin-top:1px}
+.btot{font-size:13px;font-weight:600}
+.chev{font-size:12px;margin-left:6px;transition:transform .2s}
+.slist{display:none;background:#fff}
+.srow{padding:9px 14px;border-bottom:0.5px solid rgba(0,0,0,0.06);font-size:12px}
+.srow:last-child{border-bottom:none}
+.stop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.sdesc{font-size:12px;font-weight:500}
+.smeta{font-size:10px;color:#888;margin-top:2px;line-height:1.7}
+.samt{font-size:13px;font-weight:600;white-space:nowrap}
+.badge{font-size:9px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:400}
+.bfoot{padding:8px 14px;font-size:11px;font-weight:600;text-align:right;background:rgba(0,0,0,0.03);border-top:0.5px solid rgba(0,0,0,0.06)}
+.note{background:#FAEEDA;border-radius:8px;padding:10px 13px;font-size:11px;color:#633806;margin-top:12px;line-height:1.8}
+.loading{text-align:center;padding:40px;font-size:13px;color:#888}
+.err{background:#FCEBEB;border-radius:8px;padding:12px;font-size:12px;color:#791F1F;margin-top:12px}
+@media print{
+  .btns,.note{display:none}
+  body{background:#fff;padding:8px}
+  .slist{display:block!important}
+  .branch{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="topbar">
+  <div>
+    <h1>☕ RANGSAN Slip Dashboard</h1>
+    <div class="sub" id="sheetSub">กำลังโหลดข้อมูลจาก Google Sheets...</div>
+  </div>
+  <div class="btns">
+    <button class="btn btn-gray" onclick="loadData()">🔄 รีเฟรช</button>
+    <button class="btn btn-blue" onclick="window.print()">📄 PDF</button>
+  </div>
+</div>
+
+<div id="kpiRow" class="krow"></div>
+<div id="content"><div class="loading">⏳ กำลังดึงข้อมูลจาก Google Sheets...</div></div>
+
+</div>
+<script>
+const SHEET_ID = '1VIygb6tf2YazhJLBn01ps1RUewOvcD8ExAN4nUty0zI';
+const SHEET_NAME = 'สลิปรายจ่าย';
+const COLORS = {'บางซ่อน':'#185FA5','ร้อยเอ็ด':'#639922','โยธิน':'#BA7517','หน้าวัด':'#534AB7','ส่วนกลาง':'#993C1D','ไม่ระบุ':'#888780'};
+const TC = {shopee:'background:#FAEEDA;color:#633806',transfer:'background:#E6F1FB;color:#0C447C',abc:'background:#EAF3DE;color:#27500A',store:'background:#EAF3DE;color:#27500A',macro:'background:#EEEDFE;color:#3C3489',truemoney:'background:#F1EFE8;color:#444',other:'background:#F1EFE8;color:#444'};
+const TL = {shopee:'Shopee',transfer:'โอน',abc:'ABC',store:'ร้านค้า',macro:'Makro',truemoney:'TrueMoney',other:'อื่นๆ'};
+const fmt = n => Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+async function loadData() {
+  document.getElementById('content').innerHTML = '<div class="loading">⏳ กำลังดึงข้อมูล...</div>';
+  const url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(SHEET_NAME);
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
+    if (!json.table || !json.table.rows || json.table.rows.length === 0) {
+      document.getElementById('content').innerHTML = '<div class="err">ไม่พบข้อมูลใน Sheet "' + SHEET_NAME + '"<br><small>ตรวจสอบว่า Sheet ชื่อถูกต้องและเปิด Public แล้ว</small></div>';
+      return;
+    }
+    const rows = json.table.rows.map(r => r.c.map(c => c ? (c.v !== null && c.v !== undefined ? String(c.v) : '') : ''));
+    processData(rows);
+  } catch(e) {
+    document.getElementById('content').innerHTML = '<div class="err">โหลดข้อมูลไม่สำเร็จ: ' + e.message + '<br><small>ตรวจสอบว่า Sheet เปิด Public แล้ว (Share → Anyone with link → Viewer)</small></div>';
+  }
+}
+
+function processData(rows) {
+  // COL: 0=ไฟล์ 1=วันที่ 2=เวลา 3=รายการ 4=สาขา 5=ประเภท 6=ผู้รับ 7=ผู้โอน 8=ธนาคาร 9=เลขบัญชี 10=จำนวนเงิน 11=ธุรกิจ
+  const bizRows = rows.filter(r => r[11] !== 'ไม่ใช่' && r[0]);
+  const personalRows = rows.filter(r => r[11] === 'ไม่ใช่' && r[0]);
+  const grandTotal = bizRows.reduce((a,r) => a + (parseFloat(r[10])||0), 0);
+  const personalTotal = personalRows.reduce((a,r) => a + (parseFloat(r[10])||0), 0);
+
+  const branchMap = {};
+  bizRows.forEach(r => {
+    const b = r[4] || 'ไม่ระบุ';
+    if (!branchMap[b]) branchMap[b] = {total:0, count:0, items:[]};
+    branchMap[b].total += parseFloat(r[10])||0;
+    branchMap[b].count++;
+    branchMap[b].items.push(r);
+  });
+  const branches = Object.entries(branchMap).sort((a,b) => b[1].total-a[1].total);
+
+  // KPI
+  let khtml = '<div class="kpi"><div class="kl">ยอดรวม (ธุรกิจ)</div><div class="kv">฿'+fmt(grandTotal)+'</div><div class="ks">'+bizRows.length+' รายการ</div></div>';
+  branches.forEach(([b,v]) => {
+    khtml += '<div class="kpi"><div class="kl">'+esc(b)+'</div><div class="kv" style="color:'+(COLORS[b]||'#888')+'">฿'+fmt(v.total)+'</div><div class="ks">'+v.count+' รายการ</div></div>';
+  });
+  if (personalRows.length) khtml += '<div class="kpi"><div class="kl">ส่วนตัว (ไม่รวม)</div><div class="kv" style="color:#888">฿'+fmt(personalTotal)+'</div><div class="ks">'+personalRows.length+' รายการ</div></div>';
+  document.getElementById('kpiRow').innerHTML = khtml;
+
+  document.getElementById('sheetSub').textContent = 'ข้อมูลจาก Google Sheets · ' + rows.length + ' รายการ · อัปเดต ' + new Date().toLocaleTimeString('th-TH');
+
+  // Branch detail
+  let html = '<div class="sec">รายละเอียดแยกตามสาขา <span style="font-weight:400;color:#888">(กดเพื่อดู/ซ่อน)</span></div>';
+  branches.forEach(([b,v], idx) => {
+    const c = COLORS[b] || '#888780';
+    const rows_html = v.items.map(r => {
+      const tp = r[5]||'other';
+      const tc = TC[tp] || TC.other;
+      const tl = TL[tp] || tp;
+      return '<div class="srow"><div class="stop"><div><div class="sdesc">'+esc(r[3]||'-')+'<span class="badge" style="'+tc+'">'+esc(tl)+'</span></div><div class="smeta">'+esc(r[1])+(r[2]?' '+esc(r[2]):'')+' · โดย: '+esc(r[7])+' '+esc(r[8])+'<br>ผู้รับ: '+esc(r[6])+'</div></div><div class="samt" style="color:'+c+'">฿'+fmt(r[10])+'</div></div></div>';
+    }).join('');
+    html += '<div class="branch"><div class="bhead" style="background:'+c+'" onclick="tog('+idx+')"><div><div class="btxt">'+esc(b)+'</div><div class="bcnt">'+v.count+' รายการ</div></div><div style="display:flex;align-items:center"><div class="btot">฿'+fmt(v.total)+'</div><span class="chev" id="cv'+idx+'">▼</span></div></div><div class="slist" id="sl'+idx+'">'+rows_html+'</div><div class="bfoot" style="color:'+c+'">รวม '+esc(b)+': ฿'+fmt(v.total)+'</div></div>';
+  });
+
+  if (personalRows.length) {
+    html += '<div class="note">⚠️ รายการส่วนตัว (ไม่รวมในยอด): ';
+    html += personalRows.map(r => esc(r[3])+' ฿'+fmt(r[10])).join(' · ');
+    html += '</div>';
+  }
+
+  document.getElementById('content').innerHTML = html;
+}
+
+function tog(i) {
+  const s = document.getElementById('sl'+i);
+  const v = document.getElementById('cv'+i);
+  const o = s.style.display === 'block';
+  s.style.display = o ? 'none' : 'block';
+  v.style.transform = o ? '' : 'rotate(180deg)';
+}
+
+loadData();
+</script>
+</body>
+</html>
